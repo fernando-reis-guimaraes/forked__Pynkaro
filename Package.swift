@@ -16,7 +16,18 @@ let package = Package(
             dependencies: [
                 .product(name: "RiveRuntime", package: "rive-ios")
             ],
-            path: "Sources/Pynkaro"
+            path: "Sources/Pynkaro",
+            linkerSettings: [
+                // `swift run` gera um executável sem bundle. Embutir o plist no
+                // binário permite que o macOS encontre as descrições de uso do
+                // microfone e do reconhecimento de fala exigidas pelo TCC.
+                .unsafeFlags([
+                    "-Xlinker", "-sectcreate",
+                    "-Xlinker", "__TEXT",
+                    "-Xlinker", "__info_plist",
+                    "-Xlinker", "Info.plist"
+                ])
+            ]
         )
     ]
 )
