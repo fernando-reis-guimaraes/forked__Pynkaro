@@ -25,7 +25,11 @@ Protótipo de linha de comando. Fica ouvindo o microfone; ao ouvir **"Píncaro"*
 }
 ```
 
+> Ou configure os valores em .envrc e .env, melhor para desenvolvimento e debugging
+
 2. Compile e rode (desenvolvimento):
+
+> [!WARNING] Rodar no vscode pode produzir erro com exit code 134 sem permissão.
 
 ```bash
 cd ~/Git/Pynkaro
@@ -36,6 +40,13 @@ swift run -c release
 
 ```bash
 ./make_app.sh          # gera Pynkaro.app e Pynkaro.dmg
+```
+
+Para abrir o Pynkaro.app do terminal
+
+```bash
+source .envrc # ou direnv allow se tiver o direnv instalado
+./Pynkaro.app/Contents/MacOS/Pynkaro
 ```
 
 Para distribuir, envie o `Pynkaro.dmg`: o usuário arrasta o app para Applications e, na primeira execução, uma janela de boas-vindas pede as chaves de API (Anthropic obrigatória; ElevenLabs opcional — sem ela, voz do sistema), salvas no **Keychain**. Depois dá para editá-las em "Configurações…" no menu da orelha. O `config.json` continua funcionando como fallback para desenvolvimento.
@@ -59,14 +70,15 @@ Na primeira execução o macOS pedirá permissão de **Microfone** e **Reconheci
 
 Chaves de API: no `config.json` (ver "Como rodar"). Demais ajustes, por variável de ambiente:
 
-| Variável | Padrão | Descrição |
-|---|---|---|
-| `PYNKARO_MODEL` | `claude-sonnet-5` | modelo da API Anthropic |
-| `PYNKARO_VOICE` | melhor voz masculina pt-BR instalada | nome da voz do sistema (ex.: `Felipe (Aprimorada)`) |
+| Variável              | Padrão                                            | Descrição                                                                                           |
+| --------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `PYNKARO_MODEL`       | `claude-sonnet-5`                                 | modelo da API Anthropic                                                                             |
+| `PYNKARO_VOICE`       | melhor voz masculina pt-BR instalada              | nome da voz do sistema (ex.: `Felipe (Aprimorada)`)                                                 |
 | `ELEVENLABS_VOICE_ID` | `9yzdeviXkFddZ4Oz8Mok` (Lutz, masculina, risonha) | voz da ElevenLabs — a Lutz vem da Voice Library: adicione-a em My Voices na sua conta antes de usar |
-| `ELEVENLABS_MODEL` | `eleven_multilingual_v2` | use `eleven_flash_v2_5` para menor latência |
-| `PYNKARO_WEB_SEARCH` | `1` (ligada) | `0` desativa a busca na web |
-| `PYNKARO_WAKE_WORD` | `pincaro` | wake word (sem precisar recompilar; acentos e maiúsculas são ignorados) |
+| `ELEVENLABS_MODEL`    | `eleven_multilingual_v2`                          | use `eleven_flash_v2_5` para menor latência                                                         |
+| `PYNKARO_WEB_SEARCH`  | `1` (ligada)                                      | `0` desativa a busca na web                                                                         |
+| `PYNKARO_WAKE_WORDS`  | `pincaro,icaro`                                   | wake words em CSV; espaços, acentos e maiúsculas são ignorados                                      |
+| `PYNKARO_VERBOSE`     | `0`                                               | `1` imprime cada transcrição parcial reconhecida pelo macOS                                         |
 
 ### Avatar na tela
 
@@ -80,10 +92,10 @@ Alternativa aos sprites: um rig animado feito no [editor da Rive](https://rive.a
 
 Contrato esperado no arquivo .riv (nomes configuráveis por env):
 
-| Elemento | Nome padrão | Env var |
-|---|---|---|
-| State machine | `State Machine 1` | `PYNKARO_RIVE_STATE_MACHINE` |
-| Input numérico da boca | `mouth` (0=fechada, 1=entreaberta, 2=aberta, 3=o/u, 4=f/v) | `PYNKARO_RIVE_INPUT` |
+| Elemento               | Nome padrão                                                | Env var                      |
+| ---------------------- | ---------------------------------------------------------- | ---------------------------- |
+| State machine          | `State Machine 1`                                          | `PYNKARO_RIVE_STATE_MACHINE` |
+| Input numérico da boca | `mouth` (0=fechada, 1=entreaberta, 2=aberta, 3=o/u, 4=f/v) | `PYNKARO_RIVE_INPUT`         |
 
 ### Busca na web
 

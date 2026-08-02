@@ -13,14 +13,44 @@ final class VoiceAssistant: NSObject {
         case speaking
     }
 
-    /// Wake word (busca case/diacritic-insensitive, então "pincaro" casa
-    /// "Píncaro", "PÍNCARO"...). Sobrescreva com PYNKARO_WAKE_WORD, sem recompilar.
+    /// Wake words separadas por vírgula em PYNKARO_WAKE_WORDS.
+    /// A comparação ignora maiúsculas, minúsculas e acentos.
+    /// PYNKARO_WAKE_WORD é mantida como fallback de compatibilidade.
     private let wakeWords: [String] = {
-        if let custom = ProcessInfo.processInfo.environment["PYNKARO_WAKE_WORD"], !custom.isEmpty {
-            return [custom.lowercased()]
+        let environment = ProcessInfo.processInfo.environment
+
+        if let csv = environment["PYNKARO_WAKE_WORDS"] {
+            let values = csv
+                .split(separator: ",", omittingEmptySubsequences: false)
+                .map {
+                    String($0)
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .lowercased()
+                }
+                .filter { !$0.isEmpty }
+
+            if !values.isEmpty {
+                return values
+            }
         }
+
+        if let legacy = environment["PYNKARO_WAKE_WORD"] {
+            let value = legacy
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+
+            if !value.isEmpty {
+                return [value]
+            }
+        }
+
         return ["pincaro"]
     }()
+
+    /// Quando PYNKARO_VERBOSE=1, imprime cada transcrição parcial distinta,
+    /// inclusive antes da detecção da wake word.
+    private let isVerbose =
+        ProcessInfo.processInfo.environment["PYNKARO_VERBOSE"] == "1"
 
     /// Notifica a interface (menu bar) sobre mudanças de estado.
     var onStatusChange: ((AssistantStatus) -> Void)?
@@ -82,6 +112,7 @@ final class VoiceAssistant: NSObject {
         restartListening()
     }
 
+    private var lastVerboseTranscript = ""
     private var lastTranscript = ""
     private var question = ""
     private var silenceTimer: Timer?
@@ -146,6 +177,7 @@ final class VoiceAssistant: NSObject {
 
     private func restartListening() {
         guard !isPaused else { return }
+        lastVerboseTranscript = ""
         lastTranscript = ""
         do {
             try recognizer.startListening()
@@ -174,6 +206,11 @@ final class VoiceAssistant: NSObject {
     // MARK: - Transcrições
 
     private func handlePartial(_ text: String) {
+        if isVerbose && text != lastVerboseTranscript {
+            lastVerboseTranscript = text
+            print("🔎 Reconhecido: \(text)")
+        }
+
         switch state {
         case .waitingWakeWord:
             if wakeWords.contains(where: {
