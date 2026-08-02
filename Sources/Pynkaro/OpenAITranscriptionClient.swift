@@ -11,11 +11,41 @@ enum OpenAITranscriptionSettings {
     }
 }
 
+enum TranscriptionProvider: Equatable {
+    case auto
+    case openAI
+    case macOS
+
+    static func configured(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Self {
+        guard let raw = environment["PYNKARO_TRANSCRIPTION_PROVIDER"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else {
+            return .auto
+        }
+        switch raw.lowercased() {
+        case "auto": return .auto
+        case "openai": return .openAI
+        case "macos", "system": return .macOS
+        default:
+            print("⚠️ PYNKARO_TRANSCRIPTION_PROVIDER=\(raw) inválido; usando auto.")
+            return .auto
+        }
+    }
+}
+
 enum TranscriptionRoute: Equatable {
     case openAI
     case macOS
 
-    static func preferred(openAIKey: String?) -> Self {
+    static func preferred(
+        openAIKey: String?,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Self {
+        let provider = TranscriptionProvider.configured(environment: environment)
+        if provider == .macOS { return .macOS }
+
         guard let openAIKey,
               !openAIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .macOS

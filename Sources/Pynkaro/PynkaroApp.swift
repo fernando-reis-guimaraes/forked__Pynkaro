@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.pauseItem.title = (status == .paused) ? "Retomar escuta" : "Pausar escuta"
             }
 
-        // Anthropic é obrigatória. Sem OpenAI, a transcrição fica no macOS.
+        // Anthropic é obrigatória. OpenAI e ElevenLabs são opcionais.
         if Config.anthropicKey == nil {
             openSettings(onboarding: true)
         } else {
@@ -181,7 +181,7 @@ struct SettingsView: View {
             if isOnboarding {
                 Text("Bem-vindo ao Pynkaro! 🦊")
                     .font(.title2).bold()
-                Text("Para começar, informe a chave da Anthropic. OpenAI e ElevenLabs são opcionais; sem elas, o app usa os recursos do macOS.")
+                Text("Para começar, informe a chave da Anthropic. OpenAI e ElevenLabs são opcionais; sem elas, transcrição e voz usam os recursos do macOS.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
@@ -200,7 +200,10 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Chave da OpenAI (opcional)")
                     .font(.subheadline).bold()
-                TextField("Sem ela, o app transcreve pelo macOS", text: $openAIKey)
+                TextField("Transcrição e voz OpenAI", text: $openAIKey)
+                Text("Pode ser usada separadamente para transcrição e síntese. A voz OpenAI é gerada por IA.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Link("Criar chave em platform.openai.com",
                      destination: URL(string: "https://platform.openai.com/api-keys")!)
                     .font(.caption)
@@ -216,7 +219,7 @@ struct SettingsView: View {
             }
 
             if !isOnboarding {
-                Text("A chave da OpenAI vale imediatamente; mudanças na ElevenLabs exigem reiniciar o app.")
+                Text("As chaves valem na próxima resposta. Provedor, modelo e voz são definidos por variáveis de ambiente e exigem reiniciar o app.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

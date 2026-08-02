@@ -18,10 +18,44 @@ final class OpenAITranscriptionTests: XCTestCase {
     }
 
     func testOpenAIIsOptionalWhenSelectingTranscriptionRoute() {
-        XCTAssertEqual(TranscriptionRoute.preferred(openAIKey: nil), .macOS)
-        XCTAssertEqual(TranscriptionRoute.preferred(openAIKey: ""), .macOS)
-        XCTAssertEqual(TranscriptionRoute.preferred(openAIKey: "   "), .macOS)
-        XCTAssertEqual(TranscriptionRoute.preferred(openAIKey: "sk-test"), .openAI)
+        XCTAssertEqual(TranscriptionRoute.preferred(openAIKey: nil, environment: [:]), .macOS)
+        XCTAssertEqual(TranscriptionRoute.preferred(openAIKey: "", environment: [:]), .macOS)
+        XCTAssertEqual(TranscriptionRoute.preferred(openAIKey: "   ", environment: [:]), .macOS)
+        XCTAssertEqual(TranscriptionRoute.preferred(openAIKey: "sk-test", environment: [:]), .openAI)
+    }
+
+    func testTranscriptionProviderCanForceMacOSOrOpenAI() {
+        XCTAssertEqual(
+            TranscriptionRoute.preferred(
+                openAIKey: "sk-test",
+                environment: ["PYNKARO_TRANSCRIPTION_PROVIDER": "macos"]
+            ),
+            .macOS
+        )
+        XCTAssertEqual(
+            TranscriptionRoute.preferred(
+                openAIKey: "sk-test",
+                environment: ["PYNKARO_TRANSCRIPTION_PROVIDER": "openai"]
+            ),
+            .openAI
+        )
+        XCTAssertEqual(
+            TranscriptionRoute.preferred(
+                openAIKey: nil,
+                environment: ["PYNKARO_TRANSCRIPTION_PROVIDER": "openai"]
+            ),
+            .macOS
+        )
+    }
+
+    func testInvalidTranscriptionProviderUsesAuto() {
+        XCTAssertEqual(
+            TranscriptionRoute.preferred(
+                openAIKey: "sk-test",
+                environment: ["PYNKARO_TRANSCRIPTION_PROVIDER": "desconhecido"]
+            ),
+            .openAI
+        )
     }
 
     func testMultipartRequestContainsAuthenticationFieldsAndAudio() throws {

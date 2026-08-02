@@ -68,12 +68,7 @@ final class VoiceAssistant: NSObject {
     private let recognizer = SpeechRecognizer()
     private let questionRecorder = QuestionRecorder()
     private let transcriber = OpenAITranscriptionClient()
-    private let speaker: Speaking = {
-        if let key = Config.elevenLabsKey {
-            return ElevenLabsSpeaker(apiKey: key)
-        }
-        return Speaker()
-    }()
+    private let speaker: Speaking = SpeakerRouter()
     private let claude = ClaudeClient()
     private lazy var avatar = AvatarWindow()
 
@@ -263,7 +258,7 @@ final class VoiceAssistant: NSObject {
         state = .transcribing
 
         guard TranscriptionRoute.preferred(openAIKey: Config.openAIKey) == .openAI else {
-            print("🍎 OpenAI não configurada; usando transcrição do macOS.")
+            print("🍎 Usando transcrição do macOS.")
             beginLocalTranscription(audioURL: audioURL, generation: generation)
             return
         }
