@@ -45,8 +45,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.pauseItem.title = (status == .paused) ? "Retomar escuta" : "Pausar escuta"
             }
 
-        // Primeira execução sem chave: onboarding. Senão, direto ao trabalho.
-        if Config.anthropicKey == nil {
+        // Anthropic responde; OpenAI transcreve. Ambas são obrigatórias.
+        if Config.anthropicKey == nil || Config.openAIKey == nil {
             openSettings(onboarding: true)
         } else {
             AssistantController.shared.start()
@@ -173,6 +173,7 @@ struct SettingsView: View {
     var onSaved: (() -> Void)?
 
     @State private var anthropicKey = Config.anthropicKey ?? ""
+    @State private var openAIKey = Config.openAIKey ?? ""
     @State private var elevenLabsKey = Config.elevenLabsKey ?? ""
 
     var body: some View {
@@ -180,7 +181,7 @@ struct SettingsView: View {
             if isOnboarding {
                 Text("Bem-vindo ao Pynkaro! 🦊")
                     .font(.title2).bold()
-                Text("Para começar, informe suas chaves de API. Elas ficam guardadas com segurança no Keychain do seu Mac e nunca saem dele.")
+                Text("Para começar, informe suas chaves de API. Elas ficam guardadas com segurança no Keychain do seu Mac.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
@@ -193,6 +194,15 @@ struct SettingsView: View {
                 TextField("sk-ant-...", text: $anthropicKey)
                 Link("Criar chave em console.anthropic.com",
                      destination: URL(string: "https://console.anthropic.com")!)
+                    .font(.caption)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Chave da OpenAI (obrigatória)")
+                    .font(.subheadline).bold()
+                TextField("sk-...", text: $openAIKey)
+                Link("Criar chave em platform.openai.com",
+                     destination: URL(string: "https://platform.openai.com/api-keys")!)
                     .font(.caption)
             }
 
@@ -215,11 +225,15 @@ struct SettingsView: View {
                 Spacer()
                 Button(isOnboarding ? "Salvar e começar" : "Salvar") {
                     Config.setAnthropicKey(anthropicKey)
+                    Config.setOpenAIKey(openAIKey)
                     Config.setElevenLabsKey(elevenLabsKey)
                     onSaved?()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(anthropicKey.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(
+                    anthropicKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                    openAIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                )
             }
         }
         .textFieldStyle(.roundedBorder)

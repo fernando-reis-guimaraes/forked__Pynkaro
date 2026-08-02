@@ -6,13 +6,16 @@ import Security
 /// Ordem de resolução (a primeira encontrada vence):
 ///   1. Keychain do macOS — onde a interface do app salva (usuários finais)
 ///   2. config.json — diretório atual ou ~/.config/pynkaro/ (desenvolvimento)
-///   3. Variáveis de ambiente ANTHROPIC_API_KEY / ELEVENLABS_API_KEY (fallback)
+///   3. Variáveis de ambiente ANTHROPIC_API_KEY / OPENAI_API_KEY /
+///      ELEVENLABS_API_KEY (fallback)
 struct Config: Decodable {
     var anthropicApiKey: String?
+    var openAIApiKey: String?
     var elevenLabsApiKey: String?
 
     enum CodingKeys: String, CodingKey {
         case anthropicApiKey = "anthropic_api_key"
+        case openAIApiKey = "openai_api_key"
         case elevenLabsApiKey = "elevenlabs_api_key"
     }
 
@@ -26,6 +29,12 @@ struct Config: Decodable {
                 envVar: "ANTHROPIC_API_KEY")
     }
 
+    static var openAIKey: String? {
+        resolve(keychainAccount: "openai_api_key",
+                fileValue: shared.openAIApiKey,
+                envVar: "OPENAI_API_KEY")
+    }
+
     static var elevenLabsKey: String? {
         resolve(keychainAccount: "elevenlabs_api_key",
                 fileValue: shared.elevenLabsApiKey,
@@ -37,6 +46,11 @@ struct Config: Decodable {
     static func setAnthropicKey(_ value: String) {
         Keychain.write(value.trimmingCharacters(in: .whitespacesAndNewlines),
                        account: "anthropic_api_key")
+    }
+
+    static func setOpenAIKey(_ value: String) {
+        Keychain.write(value.trimmingCharacters(in: .whitespacesAndNewlines),
+                       account: "openai_api_key")
     }
 
     static func setElevenLabsKey(_ value: String) {
@@ -77,7 +91,7 @@ struct Config: Decodable {
                 print("⚠️ Não consegui ler \(url.path): \(error.localizedDescription)")
             }
         }
-        return Config(anthropicApiKey: nil, elevenLabsApiKey: nil)
+        return Config(anthropicApiKey: nil, openAIApiKey: nil, elevenLabsApiKey: nil)
     }
 }
 

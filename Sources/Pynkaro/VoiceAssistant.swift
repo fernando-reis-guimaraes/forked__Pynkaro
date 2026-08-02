@@ -3,12 +3,13 @@ import AVFoundation
 import Speech
 
 /// Máquina de estados do assistente:
-/// aguardando wake word → capturando pergunta → pensando (Claude) → falando → volta ao início.
+/// wake word local → gravação → transcrição OpenAI → Claude → fala → volta ao início.
 final class VoiceAssistant: NSObject {
 
     private enum State {
         case waitingWakeWord
         case capturingQuestion
+        case transcribing
         case thinking
         case speaking
     }
@@ -47,16 +48,14 @@ final class VoiceAssistant: NSObject {
         return ["pincaro"]
     }()
 
-    /// Quando PYNKARO_VERBOSE=1, imprime cada transcrição parcial distinta,
-    /// inclusive antes da detecção da wake word.
+    /// Quando PYNKARO_VERBOSE=1, imprime as parciais usadas para detectar a wake word.
     private let isVerbose =
         ProcessInfo.processInfo.environment["PYNKARO_VERBOSE"] == "1"
 
     /// Notifica a interface (menu bar) sobre mudanças de estado.
     var onStatusChange: ((AssistantStatus) -> Void)?
 
-    /// Frases que cancelam a captura (avatar some sem consultar o Claude).
-    /// Comparação sem acentos/maiúsculas; vale dita sozinha ou no fim da fala.
+    /// Frases que cancelam a pergunta depois da transcrição, sem consultar o Claude.
     private let cancelPhrases = ["esquece", "esqueca", "deixa pra la", "deixa para la", "cancela"]
 
     private var state: State = .waitingWakeWord {
@@ -65,7 +64,10 @@ final class VoiceAssistant: NSObject {
     private var isPaused = false {
         didSet { emitStatus() }
     }
+
     private let recognizer = SpeechRecognizer()
+    private let questionRecorder = QuestionRecorder()
+    private let transcriber = OpenAITranscriptionClient()
     private let speaker: Speaking = {
         if let key = Config.elevenLabsKey {
             return ElevenLabsSpeaker(apiKey: key)
@@ -75,6 +77,11 @@ final class VoiceAssistant: NSObject {
     private let claude = ClaudeClient()
     private lazy var avatar = AvatarWindow()
 
+    private var lastVerboseTranscript = ""
+    private var operationGeneration = 0
+    private var transcriptionTask: URLSessionDataTask?
+    private var pendingAudioURL: URL?
+
     private func emitStatus() {
         let status: AssistantStatus
         if isPaused {
@@ -83,6 +90,7 @@ final class VoiceAssistant: NSObject {
             switch state {
             case .waitingWakeWord:   status = .waiting
             case .capturingQuestion: status = .listening
+            case .transcribing:      status = .transcribing
             case .thinking:          status = .thinking
             case .speaking:          status = .speaking
             }
@@ -92,16 +100,18 @@ final class VoiceAssistant: NSObject {
 
     // MARK: - Pausa (menu bar)
 
-    /// Interrompe a escuta sem encerrar o app.
+    /// Interrompe captura e transcrição sem encerrar o app.
     func pause() {
         guard !isPaused else { return }
-        silenceTimer?.invalidate()
-        recognizer.stopListening()
-        avatar.hide()
-        question = ""
-        lastTranscript = ""
-        state = .waitingWakeWord
+        operationGeneration += 1
         isPaused = true
+        recognizer.stopListening()
+        questionRecorder.cancel()
+        transcriptionTask?.cancel()
+        transcriptionTask = nil
+        removePendingAudio()
+        avatar.hide()
+        state = .waitingWakeWord
         print("⏸️ Escuta pausada.")
     }
 
@@ -111,11 +121,6 @@ final class VoiceAssistant: NSObject {
         print("👂 Escuta retomada. Aguardando \"\(wakeWords[0])\"...")
         restartListening()
     }
-
-    private var lastVerboseTranscript = ""
-    private var lastTranscript = ""
-    private var question = ""
-    private var silenceTimer: Timer?
 
     // MARK: - Inicialização e permissões
 
@@ -139,30 +144,27 @@ final class VoiceAssistant: NSObject {
 
     private func setup() {
         if recognizer.isOnDevice {
-            print("🔒 Reconhecimento de fala 100% local (on-device).")
+            print("🔒 Detecção da wake word 100% local (on-device).")
         } else {
             print("⚠️ Este Mac não suporta reconhecimento on-device em pt-BR;")
-            print("   o áudio será processado nos servidores da Apple.")
+            print("   a wake word será processada nos servidores da Apple.")
             print("   (Baixe o idioma em Ajustes > Teclado > Ditado para ativar o modo local.)")
         }
 
-        // Favorece a wake word na transcrição (palavra rara no dia a dia).
         recognizer.contextualStrings = wakeWords
 
-        // Anima a boca do avatar conforme o volume/ritmo da fala.
         speaker.onMouthLevel = { [weak self] level in
             self?.avatar.setMouth(level)
         }
 
         recognizer.onPartial = { [weak self] text in
-            DispatchQueue.main.async { self?.handlePartial(text) }
+            DispatchQueue.main.async { self?.handleWakeWordPartial(text) }
         }
         recognizer.onError = { [weak self] _ in
             DispatchQueue.main.async { self?.recoverListening() }
         }
 
-        // O SFSpeechRecognizer limita sessões a ~1 minuto:
-        // reinicia a escuta periodicamente enquanto aguarda a wake word.
+        // O SFSpeechRecognizer limita sessões a ~1 minuto.
         Timer.scheduledTimer(withTimeInterval: 45, repeats: true) { [weak self] _ in
             guard let self, self.state == .waitingWakeWord, !self.isPaused else { return }
             self.restartListening()
@@ -173,12 +175,11 @@ final class VoiceAssistant: NSObject {
         print("👂 Aguardando \"\(wakeWords[0])\"... (Ctrl+C para sair)")
     }
 
-    // MARK: - Escuta
+    // MARK: - Wake word local
 
     private func restartListening() {
-        guard !isPaused else { return }
+        guard !isPaused, state == .waitingWakeWord else { return }
         lastVerboseTranscript = ""
-        lastTranscript = ""
         do {
             try recognizer.startListening()
         } catch {
@@ -189,76 +190,125 @@ final class VoiceAssistant: NSObject {
         }
     }
 
-    /// Recupera a escuta após um erro do reconhecedor (ex.: timeout de sessão).
     private func recoverListening() {
-        guard !isPaused else { return }
-        guard state == .waitingWakeWord || state == .capturingQuestion else { return }
-        if state == .capturingQuestion { avatar.hide() }
-        state = .waitingWakeWord
-        silenceTimer?.invalidate()
-        question = ""
+        guard !isPaused, state == .waitingWakeWord else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self, self.state == .waitingWakeWord else { return }
-            self.restartListening()
+            self?.restartListening()
         }
     }
 
-    // MARK: - Transcrições
+    private func handleWakeWordPartial(_ text: String) {
+        guard !isPaused, state == .waitingWakeWord else { return }
 
-    private func handlePartial(_ text: String) {
         if isVerbose && text != lastVerboseTranscript {
             lastVerboseTranscript = text
-            print("🔎 Reconhecido: \(text)")
+            print("🔎 Wake word: \(text)")
         }
 
-        switch state {
-        case .waitingWakeWord:
-            if wakeWords.contains(where: {
-                text.range(of: $0, options: [.caseInsensitive, .diacriticInsensitive]) != nil
-            }) {
-                state = .capturingQuestion
-                print("🎤 Pode falar...")
-                avatar.show()
-                updateQuestion(from: text)
+        guard wakeWords.contains(where: {
+            text.range(of: $0, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+        }) else { return }
+
+        // O reconhecedor local para aqui. A pergunta será apenas gravada e enviada à OpenAI.
+        recognizer.stopListening()
+        beginQuestionCapture()
+    }
+
+    // MARK: - Gravação e transcrição
+
+    private func beginQuestionCapture() {
+        operationGeneration += 1
+        let generation = operationGeneration
+        state = .capturingQuestion
+        avatar.show()
+        avatar.setCaption("Pode falar…")
+
+        do {
+            try questionRecorder.start { [weak self] result in
+                DispatchQueue.main.async {
+                    self?.handleRecordingResult(result, generation: generation)
+                }
             }
-        case .capturingQuestion:
-            updateQuestion(from: text)
-        case .thinking, .speaking:
-            break
+            print("🎤 Pode falar...")
+        } catch {
+            handleRecordingResult(.failure(error), generation: generation)
         }
     }
 
-    private func updateQuestion(from transcript: String) {
-        // Só rearma o timer de silêncio quando o texto realmente mudou.
-        guard transcript != lastTranscript else { return }
-        lastTranscript = transcript
-        print("📝 Ouvido: \(transcript)")
+    private func handleRecordingResult(_ result: Result<URL?, Error>, generation: Int) {
+        guard generation == operationGeneration,
+              !isPaused,
+              state == .capturingQuestion else { return }
 
-        // A pergunta é tudo que vem depois da última ocorrência da wake word
-        // (considerando todas as variantes).
-        let ranges = wakeWords.compactMap {
-            transcript.range(of: $0, options: [.caseInsensitive, .diacriticInsensitive, .backwards])
+        switch result {
+        case .failure(let error):
+            handleOperationalError(
+                error,
+                message: "Desculpe, não consegui gravar sua pergunta.",
+                generation: generation
+            )
+
+        case .success(nil):
+            print("😴 Nenhuma fala detectada. Voltando a aguardar.")
+            returnToWakeWord()
+
+        case .success(let audioURL?):
+            pendingAudioURL = audioURL
+            state = .transcribing
+            avatar.setCaption("Transcrevendo…")
+            print("☁️ Transcrevendo pergunta com a OpenAI...")
+
+            transcriptionTask = transcriber.transcribe(audioURL: audioURL) { [weak self] result in
+                DispatchQueue.main.async {
+                    self?.handleTranscriptionResult(
+                        result,
+                        audioURL: audioURL,
+                        generation: generation
+                    )
+                }
+            }
         }
-        if let last = ranges.max(by: { $0.upperBound < $1.upperBound }) {
-            // Wake word presente: a pergunta é o que vem depois dela.
-            question = String(transcript[last.upperBound...])
-                .trimmingCharacters(in: CharacterSet(charactersIn: " ,.!?"))
-        } else {
-            // O reconhecedor finalizou a sentença da wake word e recomeçou a
-            // transcrição do zero (acontece após uma pausa): o texto novo
-            // inteiro é a pergunta.
-            question = transcript
-                .trimmingCharacters(in: CharacterSet(charactersIn: " ,.!?"))
-        }
-        // "Esquece" / "deixa pra lá" / "cancela": aborta sem responder.
-        if isCancelRequest(question) {
-            cancelCapture()
-            return
+    }
+
+    private func handleTranscriptionResult(_ result: Result<String, Error>,
+                                           audioURL: URL,
+                                           generation: Int) {
+        try? FileManager.default.removeItem(at: audioURL)
+        if pendingAudioURL == audioURL {
+            pendingAudioURL = nil
         }
 
-        // Legenda ao vivo com o que está sendo ouvido.
-        avatar.setCaption(question.isEmpty ? nil : "Você: \(question)")
-        armSilenceTimer()
+        guard generation == operationGeneration,
+              !isPaused,
+              state == .transcribing else { return }
+        transcriptionTask = nil
+
+        switch result {
+        case .failure(let error):
+            handleOperationalError(
+                error,
+                message: "Desculpe, não consegui transcrever sua pergunta.",
+                generation: generation
+            )
+
+        case .success(let question):
+            print("📝 Transcrição: \(question)")
+            avatar.setCaption("Você: \(question)")
+
+            if isCancelRequest(question) {
+                print("🙈 Cancelado por voz. Voltando a aguardar.")
+                returnToWakeWord()
+                return
+            }
+
+            state = .thinking
+            print("🧠 Pergunta: \(question)")
+            claude.ask(question) { [weak self] result in
+                DispatchQueue.main.async {
+                    self?.handleAnswer(result, generation: generation)
+                }
+            }
+        }
     }
 
     private func isCancelRequest(_ text: String) -> Bool {
@@ -270,54 +320,13 @@ final class VoiceAssistant: NSObject {
         return cancelPhrases.contains { normalized == $0 || normalized.hasSuffix(" " + $0) }
     }
 
-    /// Aborta a captura sem consultar o Claude: o avatar some em silêncio.
-    private func cancelCapture() {
-        guard state == .capturingQuestion else { return }
-        print("🙈 Cancelado (\"esquece\"). Voltando a aguardar.")
-        silenceTimer?.invalidate()
-        recognizer.stopListening()
-        avatar.hide()
-        question = ""
-        lastTranscript = ""
-        state = .waitingWakeWord
-        restartListening()
-    }
+    // MARK: - Claude e fala
 
-    private func armSilenceTimer() {
-        silenceTimer?.invalidate()
-        // Se ainda não há pergunta, dá mais tempo para o usuário formular.
-        let interval: TimeInterval = question.isEmpty ? 6.0 : 1.8
-        silenceTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
-            self?.finishCapture()
-        }
-    }
+    private func handleAnswer(_ result: Result<String, Error>, generation: Int) {
+        guard generation == operationGeneration,
+              !isPaused,
+              state == .thinking else { return }
 
-    // MARK: - Pergunta → Claude → Fala
-
-    private func finishCapture() {
-        guard state == .capturingQuestion else { return }
-        recognizer.stopListening()
-
-        let q = question
-        question = ""
-        lastTranscript = ""
-
-        guard !q.isEmpty else {
-            print("😴 Nenhuma pergunta detectada. Voltando a aguardar.")
-            avatar.hide()
-            state = .waitingWakeWord
-            restartListening()
-            return
-        }
-
-        state = .thinking
-        print("🧠 Pergunta: \(q)")
-        claude.ask(q) { [weak self] result in
-            DispatchQueue.main.async { self?.handleAnswer(result) }
-        }
-    }
-
-    private func handleAnswer(_ result: Result<String, Error>) {
         let reply: String
         switch result {
         case .success(let text):
@@ -327,16 +336,46 @@ final class VoiceAssistant: NSObject {
             reply = "Desculpe, não consegui falar com a inteligência artificial agora."
         }
 
+        speak(reply, generation: generation)
+    }
+
+    private func handleOperationalError(_ error: Error, message: String, generation: Int) {
+        print("⚠️ \(error.localizedDescription)")
+        speak(message, generation: generation)
+    }
+
+    private func speak(_ reply: String, generation: Int) {
+        guard generation == operationGeneration, !isPaused else { return }
         print("💬 \(reply)")
         state = .speaking
         avatar.setCaption(reply)
-        // A escuta fica parada enquanto fala — evita que o assistente ouça a si mesmo.
         speaker.speak(reply) { [weak self] in
-            guard let self else { return }
-            self.avatar.hide()
-            self.state = .waitingWakeWord
-            print("👂 Aguardando \"\(wakeWords[0])\"...")
-            self.restartListening()
+            DispatchQueue.main.async {
+                guard let self,
+                      generation == self.operationGeneration,
+                      !self.isPaused,
+                      self.state == .speaking else { return }
+                self.returnToWakeWord()
+            }
         }
+    }
+
+    private func returnToWakeWord() {
+        questionRecorder.cancel()
+        transcriptionTask?.cancel()
+        transcriptionTask = nil
+        removePendingAudio()
+        avatar.hide()
+        state = .waitingWakeWord
+        guard !isPaused else { return }
+        print("👂 Aguardando \"\(wakeWords[0])\"...")
+        restartListening()
+    }
+
+    private func removePendingAudio() {
+        if let pendingAudioURL {
+            try? FileManager.default.removeItem(at: pendingAudioURL)
+        }
+        pendingAudioURL = nil
     }
 }

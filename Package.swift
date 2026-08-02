@@ -17,6 +17,11 @@ let package = Package(
                 .product(name: "RiveRuntime", package: "rive-ios")
             ],
             path: "Sources/Pynkaro"
+        ),
+        .testTarget(
+            name: "PynkaroTests",
+            dependencies: ["Pynkaro"],
+            path: "Tests/PynkaroTests"
         )
     ]
 )

@@ -1,4 +1,5 @@
 {
   "anthropic_api_key": "<CHAVE_API_ANTHROPIC>",
-  "elevenlabs_api_key": "<CHAVE_API_ELEVENLABS>"
+  "elevenlabs_api_key": "<CHAVE_API_ELEVENLABS>",
+  "openai_api_key": "<CHAVE_API_OPENAI>"
 }

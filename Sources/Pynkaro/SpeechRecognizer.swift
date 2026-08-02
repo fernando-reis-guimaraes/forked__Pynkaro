@@ -2,8 +2,8 @@ import Foundation
 import AVFoundation
 import Speech
 
-/// Captura o microfone com AVAudioEngine e transcreve continuamente
-/// com SFSpeechRecognizer (on-device quando disponível).
+/// Escuta continuamente com SFSpeechRecognizer para detectar a wake word.
+/// É encerrado antes da gravação da pergunta (on-device quando disponível).
 final class SpeechRecognizer {
 
     /// Chamado a cada transcrição parcial (texto acumulado da sessão atual).

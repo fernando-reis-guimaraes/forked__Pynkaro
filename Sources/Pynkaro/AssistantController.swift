@@ -6,6 +6,7 @@ enum AssistantStatus: Equatable {
     case starting
     case waiting
     case listening
+    case transcribing
     case thinking
     case speaking
     case paused
@@ -15,6 +16,7 @@ enum AssistantStatus: Equatable {
         case .starting:  return "hourglass"
         case .waiting:   return "ear"
         case .listening: return "waveform"
+        case .transcribing: return "text.bubble"
         case .thinking:  return "ellipsis.bubble"
         case .speaking:  return "speaker.wave.2.fill"
         case .paused:    return "pause.circle"
@@ -26,6 +28,7 @@ enum AssistantStatus: Equatable {
         case .starting:  return "Aguardando configuração…"
         case .waiting:   return "Aguardando \"Píncaro\""
         case .listening: return "Ouvindo…"
+        case .transcribing: return "Transcrevendo…"
         case .thinking:  return "Pensando…"
         case .speaking:  return "Falando…"
         case .paused:    return "Escuta pausada"

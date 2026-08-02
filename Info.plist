@@ -21,8 +21,8 @@
     <key>LSUIElement</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>O Pynkaro escuta o microfone para detectar a palavra de ativação e transcrever suas perguntas — tudo localmente.</string>
+    <string>O Pynkaro usa o microfone para detectar a palavra de ativação localmente e enviar suas perguntas à OpenAI para transcrição.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>O Pynkaro usa o reconhecimento de fala do macOS para transcrever suas perguntas em português.</string>
+    <string>O Pynkaro usa o reconhecimento de fala do macOS somente para detectar a palavra de ativação.</string>
 </dict>
 </plist>

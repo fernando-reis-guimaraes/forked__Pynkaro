@@ -1,18 +1,20 @@
 # Pynkaro — assistente de voz local para macOS
 
-Protótipo de linha de comando. Fica ouvindo o microfone; ao ouvir **"Píncaro"**, captura a pergunta, transcreve localmente, envia para o Claude via API e fala a resposta.
+Protótipo de linha de comando. Fica ouvindo o microfone; ao ouvir **"Píncaro"**, grava a pergunta, transcreve com a OpenAI, envia o texto para o Claude e fala a resposta.
 
 ## Privacidade
 
-- Wake word e transcrição: **Speech framework da Apple, on-device** (nenhum áudio sai do Mac, se o idioma pt-BR estiver baixado — veja abaixo).
+- Wake word: **Speech framework da Apple, on-device** (se o idioma pt-BR estiver baixado — veja abaixo).
+- Transcrição da pergunta: **OpenAI** (`gpt-4o-transcribe`); o arquivo de áudio temporário é enviado à API e apagado depois da resposta.
 - Voz: **AVSpeechSynthesizer**, local.
-- Único tráfego de rede: o **texto** da pergunta para `api.anthropic.com`.
+- O texto da pergunta é enviado para `api.anthropic.com`; com ElevenLabs, o texto da resposta também é enviado para síntese de voz.
 
 ## Requisitos
 
 - macOS 13+ (Apple Silicon recomendado), Xcode ou Command Line Tools instalados.
 - Chave de API da Anthropic (https://console.anthropic.com).
-- Para transcrição 100% local: em **Ajustes do Sistema > Teclado > Ditado**, ative o ditado e baixe o idioma Português (Brasil). O app avisa no início se o modo on-device está ativo.
+- Chave de API da OpenAI (https://platform.openai.com/api-keys).
+- Para detecção local da wake word: em **Ajustes do Sistema > Teclado > Ditado**, ative o ditado e baixe Português (Brasil). O app avisa no início se o modo on-device está ativo.
 
 ## Como rodar
 
@@ -21,6 +23,7 @@ Protótipo de linha de comando. Fica ouvindo o microfone; ao ouvir **"Píncaro"*
 ```json
 {
   "anthropic_api_key": "sk-ant-...",
+  "openai_api_key": "sk-...",
   "elevenlabs_api_key": "..."
 }
 ```
@@ -49,21 +52,21 @@ source .envrc # ou direnv allow se tiver o direnv instalado
 ./Pynkaro.app/Contents/MacOS/Pynkaro
 ```
 
-Para distribuir, envie o `Pynkaro.dmg`: o usuário arrasta o app para Applications e, na primeira execução, uma janela de boas-vindas pede as chaves de API (Anthropic obrigatória; ElevenLabs opcional — sem ela, voz do sistema), salvas no **Keychain**. Depois dá para editá-las em "Configurações…" no menu da orelha. O `config.json` continua funcionando como fallback para desenvolvimento.
+Para distribuir, envie o `Pynkaro.dmg`: o usuário arrasta o app para Applications e, na primeira execução, uma janela de boas-vindas pede as chaves de API (Anthropic e OpenAI obrigatórias; ElevenLabs opcional — sem ela, voz do sistema), salvas no **Keychain**. Depois dá para editá-las em "Configurações…" no menu da orelha. O `config.json` continua funcionando como fallback para desenvolvimento.
 
 **Atenção (Gatekeeper):** com a assinatura ad-hoc atual, o app só roda sem bloqueio no Mac em que foi compilado. Para outros Macs é preciso assinar com **Developer ID** e **notarizar** (conta Apple Developer, US$ 99/ano): `codesign --sign "Developer ID Application: ..." --options runtime`, depois `xcrun notarytool submit` e `xcrun stapler staple`.
 
 O app vive na **menu bar** (sem ícone no Dock): o ícone muda com o estado (ouvindo/pensando/falando), e o menu permite pausar/retomar a escuta, definir os sugestores de notícias e sair. Rodando como .app, o config.json é lido de `~/.config/pynkaro/` e o avatar vem embutido no bundle.
 
-O `config.json` é procurado no diretório atual e depois em `~/.config/pynkaro/config.json`. As variáveis de ambiente `ANTHROPIC_API_KEY`/`ELEVENLABS_API_KEY` seguem funcionando como fallback para campos vazios.
+O `config.json` é procurado no diretório atual e depois em `~/.config/pynkaro/config.json`. As variáveis de ambiente `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`/`ELEVENLABS_API_KEY` funcionam como fallback para campos vazios.
 
 Na primeira execução o macOS pedirá permissão de **Microfone** e **Reconhecimento de Fala** para o Terminal. Se os diálogos não aparecerem, habilite manualmente em Ajustes do Sistema > Privacidade e Segurança.
 
 ## Uso
 
 1. Aguarde `👂 Aguardando "Píncaro"...`
-2. Diga: **"Píncaro, que horas são em Tóquio?"** (ou diga só "Píncaro", aguarde o `🎤 Pode falar...` no terminal, e pergunte)
-3. Ele transcreve, consulta o Claude e responde em voz alta.
+2. Diga **"Píncaro"**, aguarde `🎤 Pode falar...` e então faça a pergunta. A pausa é necessária para trocar do reconhecedor local para o gravador.
+3. Ele envia o áudio da pergunta à OpenAI, consulta o Claude com a transcrição e responde em voz alta.
 4. O histórico da conversa é mantido durante a sessão.
 
 ## Configuração
@@ -78,7 +81,7 @@ Chaves de API: no `config.json` (ver "Como rodar"). Demais ajustes, por variáve
 | `ELEVENLABS_MODEL`    | `eleven_multilingual_v2`                          | use `eleven_flash_v2_5` para menor latência                                                         |
 | `PYNKARO_WEB_SEARCH`  | `1` (ligada)                                      | `0` desativa a busca na web                                                                         |
 | `PYNKARO_WAKE_WORDS`  | `pincaro,icaro`                                   | wake words em CSV; espaços, acentos e maiúsculas são ignorados                                      |
-| `PYNKARO_VERBOSE`     | `0`                                               | `1` imprime cada transcrição parcial reconhecida pelo macOS                                         |
+| `PYNKARO_VERBOSE`     | `0`                                               | `1` imprime as parciais usadas pelo macOS para detectar a wake word                                  |
 
 ### Avatar na tela
 
@@ -103,7 +106,7 @@ O app habilita a ferramenta de busca da própria API da Anthropic (`web_search`)
 
 ### Voz ElevenLabs
 
-Com `ELEVENLABS_API_KEY` definida, a resposta é sintetizada na nuvem da ElevenLabs (voz neural, muito mais natural). Apenas o **texto** da resposta é enviado; o áudio do microfone continua nunca saindo do Mac. Se a API falhar, o app usa a voz do sistema como fallback.
+Com `ELEVENLABS_API_KEY` definida, a resposta é sintetizada na nuvem da ElevenLabs (voz neural, muito mais natural). Apenas o **texto** da resposta é enviado à ElevenLabs; o áudio do microfone é enviado somente à OpenAI para transcrição. Se a API de voz falhar, o app usa a voz do sistema como fallback.
 
 Para escolher outra voz, veja as suas em https://elevenlabs.io/app/voice-lab ou liste via API:
 
@@ -117,13 +120,15 @@ Ajustes no código: wake word em `VoiceAssistant.swift` (`wakeWord`), tempo de s
 
 ```
 main.swift            → entrada, run loop
-VoiceAssistant.swift  → máquina de estados (aguardando → capturando → pensando → falando)
-SpeechRecognizer.swift→ AVAudioEngine + SFSpeechRecognizer (pt-BR, on-device)
+VoiceAssistant.swift  → máquina de estados e coordenação do fluxo
+SpeechRecognizer.swift→ wake word via SFSpeechRecognizer (pt-BR, on-device)
+QuestionRecorder.swift→ gravação M4A + detecção de silêncio por volume
+OpenAITranscriptionClient.swift → envio multipart e transcrição da pergunta
 ClaudeClient.swift    → Messages API da Anthropic, com histórico
 Speaker.swift         → AVSpeechSynthesizer (voz pt-BR)
 ```
 
-Detalhes de implementação: a sessão de reconhecimento é reiniciada a cada 45 s (limite de ~1 min do SFSpeechRecognizer); o fim da pergunta é detectado por silêncio (sem nova transcrição por 1,8 s); a escuta é pausada enquanto o assistente fala, para não ouvir a si mesmo.
+Detalhes de implementação: a sessão local da wake word é reiniciada a cada 45 s (limite de ~1 min do SFSpeechRecognizer); depois da ativação há até 6 s para começar a pergunta, que termina após 1,8 s de silêncio ou 60 s no total. A escuta é pausada enquanto o assistente fala, para não ouvir a si mesmo.
 
 ## Limitações do protótipo / próximos passos
 
