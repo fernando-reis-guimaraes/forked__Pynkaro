@@ -1,5 +1,26 @@
 import Foundation
 
+enum ClaudeEffortSettings {
+    static let supportedValues = ["low", "medium", "high", "xhigh", "max"]
+
+    /// Haiku 4.5 não aceita output_config.effort. Sonnet 5 e Opus 5
+    /// aceitam todos os níveis; valores inválidos preservam o padrão da API.
+    static func resolve(model: String, environment: [String: String]) -> String? {
+        let normalizedModel = model.lowercased()
+        let supportsEffort = normalizedModel.contains("sonnet-5") ||
+            normalizedModel.contains("opus-5")
+        guard let configured = environment["PYNKARO_CLAUDE_EFFORT"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased(),
+              !configured.isEmpty,
+              supportedValues.contains(configured),
+              supportsEffort else {
+            return nil
+        }
+        return configured
+    }
+}
+
 /// Cliente mínimo da Messages API da Anthropic, com histórico de conversa.
 final class ClaudeClient {
 
@@ -16,6 +37,7 @@ final class ClaudeClient {
     /// Lida a cada uso: mudanças feitas em Configurações valem na hora.
     private var apiKey: String { Config.anthropicKey ?? "" }
     private let model: String
+    private let effort: String?
     private let webSearchEnabled: Bool
 
     /// Nomes de quem sugeriu as notícias — definidos na janela
@@ -82,7 +104,13 @@ final class ClaudeClient {
     init() {
         let env = ProcessInfo.processInfo.environment
         model = env["PYNKARO_MODEL"] ?? "claude-sonnet-5"
+        effort = ClaudeEffortSettings.resolve(model: model, environment: env)
         webSearchEnabled = env["PYNKARO_WEB_SEARCH"] != "0"
+        if let effort {
+            print("⚡ Claude: modelo \(model), effort \(effort).")
+        } else if let configured = env["PYNKARO_CLAUDE_EFFORT"], !configured.isEmpty {
+            print("⚠️ PYNKARO_CLAUDE_EFFORT ignorado para \(model) ou valor inválido.")
+        }
         if webSearchEnabled {
             print("🌐 Busca na web habilitada (desative com PYNKARO_WEB_SEARCH=0).")
         }
@@ -120,6 +148,9 @@ final class ClaudeClient {
             "system": systemPrompt,
             "messages": history
         ]
+        if let effort {
+            body["output_config"] = ["effort": effort]
+        }
         if webSearchEnabled {
             // Ferramenta executada nos servidores da Anthropic: o Claude decide
             // quando pesquisar. max_uses limita o custo (US$ 10 / 1000 buscas).

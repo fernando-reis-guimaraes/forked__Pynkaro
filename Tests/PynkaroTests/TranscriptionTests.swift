@@ -104,19 +104,41 @@ final class OpenAITranscriptionTests: XCTestCase {
 }
 
 final class SpeechActivityDetectorTests: XCTestCase {
+    func testFinalSilenceComesFromMillisecondsEnvironmentVariable() {
+        XCTAssertEqual(QuestionRecorderSettings.finalSilenceDuration(environment: [:]), 1.2)
+        XCTAssertEqual(
+            QuestionRecorderSettings.finalSilenceDuration(
+                environment: ["PYNKARO_FINAL_SILENCE_MS": "1800"]
+            ),
+            1.8
+        )
+        XCTAssertEqual(
+            QuestionRecorderSettings.finalSilenceDuration(
+                environment: ["PYNKARO_FINAL_SILENCE_MS": "1200"]
+            ),
+            1.2
+        )
+        XCTAssertEqual(
+            QuestionRecorderSettings.finalSilenceDuration(
+                environment: ["PYNKARO_FINAL_SILENCE_MS": "100"]
+            ),
+            1.2
+        )
+    }
+
     func testNoSpeechTimesOutAfterSixSeconds() {
         var detector = SpeechActivityDetector()
         XCTAssertNil(detector.process(powerDB: -70, elapsed: 5.95))
         XCTAssertEqual(detector.process(powerDB: -70, elapsed: 6.0), .noSpeech)
     }
 
-    func testSpeechFinishesAfterOnePointEightSecondsOfSilence() {
+    func testSpeechFinishesAfterOnePointTwoSecondsOfSilence() {
         var detector = SpeechActivityDetector()
         XCTAssertNil(detector.process(powerDB: -20, elapsed: 0.0))
         XCTAssertNil(detector.process(powerDB: -20, elapsed: 0.2))
         XCTAssertNil(detector.process(powerDB: -20, elapsed: 0.4))
-        XCTAssertNil(detector.process(powerDB: -70, elapsed: 2.15))
-        XCTAssertEqual(detector.process(powerDB: -70, elapsed: 2.2), .finish)
+        XCTAssertNil(detector.process(powerDB: -70, elapsed: 1.55))
+        XCTAssertEqual(detector.process(powerDB: -70, elapsed: 1.6), .finish)
     }
 
     func testBriefNoiseDoesNotCountAsSpeech() {

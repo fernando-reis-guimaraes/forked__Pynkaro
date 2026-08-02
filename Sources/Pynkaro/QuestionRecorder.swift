@@ -1,6 +1,22 @@
 import Foundation
 import AVFoundation
 
+enum QuestionRecorderSettings {
+    static let defaultFinalSilenceMilliseconds = 1_200
+    static let validRange = 300...5_000
+
+    static func finalSilenceDuration(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> TimeInterval {
+        guard let raw = environment["PYNKARO_FINAL_SILENCE_MS"],
+              let milliseconds = Int(raw),
+              validRange.contains(milliseconds) else {
+            return TimeInterval(defaultFinalSilenceMilliseconds) / 1_000
+        }
+        return TimeInterval(milliseconds) / 1_000
+    }
+}
+
 enum SpeechActivityDecision: Equatable {
     case finish
     case noSpeech
@@ -19,7 +35,7 @@ struct SpeechActivityDetector {
     private var lastSpeechAt: TimeInterval?
 
     init(initialTimeout: TimeInterval = 6.0,
-         silenceDuration: TimeInterval = 1.8,
+         silenceDuration: TimeInterval = 1.2,
          maximumDuration: TimeInterval = 60.0,
          speechThresholdDB: Float = -35.0,
          minimumSpeechDuration: TimeInterval = 0.15) {
@@ -83,7 +99,9 @@ final class QuestionRecorder: NSObject, AVAudioRecorderDelegate {
     private var completion: Completion?
     private var outputURL: URL?
     private var startedAt: Date?
-    private var activityDetector = SpeechActivityDetector()
+    private var activityDetector = SpeechActivityDetector(
+        silenceDuration: QuestionRecorderSettings.finalSilenceDuration()
+    )
 
     func start(completion: @escaping Completion) throws {
         cancel()
@@ -111,7 +129,9 @@ final class QuestionRecorder: NSObject, AVAudioRecorderDelegate {
         self.outputURL = url
         self.completion = completion
         self.startedAt = Date()
-        self.activityDetector = SpeechActivityDetector()
+        self.activityDetector = SpeechActivityDetector(
+            silenceDuration: QuestionRecorderSettings.finalSilenceDuration()
+        )
 
         meterTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             self?.sampleAudioLevel()

@@ -81,7 +81,9 @@ Chaves de API: no `config.json` (ver "Como rodar"). Demais ajustes, por variáve
 | Variável              | Padrão                                            | Descrição                                                                                           |
 | --------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `PYNKARO_MODEL`       | `claude-sonnet-5`                                 | modelo da API Anthropic                                                                             |
+| `PYNKARO_CLAUDE_EFFORT` | padrão da API                                   | Sonnet/Opus: `low`, `medium`, `high`, `xhigh`, `max`; Haiku não suporta effort                       |
 | `OPENAI_TRANSCRIPTION_MODEL` | `gpt-4o-transcribe`                       | use `gpt-4o-mini-transcribe` para priorizar custo e potencialmente menor latência                    |
+| `PYNKARO_FINAL_SILENCE_MS` | `1200`                                         | silêncio final em ms; aceita de `300` a `5000` (`1800` tolera pausas mais longas)                     |
 | `PYNKARO_VOICE`       | melhor voz masculina pt-BR instalada              | nome da voz do sistema (ex.: `Felipe (Aprimorada)`)                                                 |
 | `ELEVENLABS_VOICE_ID` | `9yzdeviXkFddZ4Oz8Mok` (Lutz, masculina, risonha) | voz da ElevenLabs — a Lutz vem da Voice Library: adicione-a em My Voices na sua conta antes de usar |
 | `ELEVENLABS_MODEL`    | `eleven_multilingual_v2`                          | use `eleven_flash_v2_5` para menor latência                                                         |
@@ -134,7 +136,7 @@ ClaudeClient.swift    → Messages API da Anthropic, com histórico
 Speaker.swift         → AVSpeechSynthesizer (voz pt-BR)
 ```
 
-Detalhes de implementação: a sessão local da wake word é reiniciada a cada 45 s (limite de ~1 min do SFSpeechRecognizer); depois da ativação há até 6 s para começar a pergunta, que termina após 1,8 s de silêncio ou 60 s no total. A escuta é pausada enquanto o assistente fala, para não ouvir a si mesmo.
+Detalhes de implementação: a sessão local da wake word é reiniciada a cada 45 s (limite de ~1 min do SFSpeechRecognizer); depois da ativação há até 6 s para começar a pergunta, que termina após `PYNKARO_FINAL_SILENCE_MS` (padrão 1,2 s) de silêncio ou 60 s no total. A escuta é pausada enquanto o assistente fala, para não ouvir a si mesmo.
 
 ## Limitações do protótipo / próximos passos
 
