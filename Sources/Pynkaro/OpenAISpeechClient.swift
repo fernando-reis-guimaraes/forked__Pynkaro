@@ -5,8 +5,18 @@ enum OpenAISpeechSettings {
     static let defaultModel = "gpt-4o-mini-tts"
     static let defaultVoice = "onyx"
     static let defaultSpeed = 1.0
-    static let defaultInstructions =
-        "Fale em português brasileiro, com tom caloroso, bem-humorado e ritmo ligeiramente rápido."
+    static let defaultInstructions = """
+        Fale em português brasileiro, com sotaque brasileiro neutro. Use uma voz masculina \
+        jovem-adulta, entre 25 e 35 anos, com altura média a levemente aguda, timbre claro e \
+        brilhante, tom suave, articulação nítida e pronúncia natural. Mantenha uma entrega \
+        conversacional, amigável, inteligente, energética e levemente brincalhona, em ritmo \
+        moderadamente rápido, com pausas curtas e naturais e entonação expressiva, porém \
+        controlada. Soe espontâneo e acessível, como um assistente de tecnologia perspicaz \
+        falando diretamente com uma pessoa. Evite voz grave ou retumbante, locução de rádio, \
+        interpretação teatral, entusiasmo excessivo, voz soprosa, sensualidade, infantilidade, \
+        ritmo robótico e sotaques regionais marcados. Mantenha o resultado natural, moderno, \
+        conciso e responsivo.
+        """
 
     static func model(
         environment: [String: String] = ProcessInfo.processInfo.environment
