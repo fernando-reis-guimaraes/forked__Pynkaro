@@ -1,5 +1,16 @@
 import Foundation
 
+enum OpenAITranscriptionSettings {
+    static let defaultModel = "gpt-4o-transcribe"
+
+    static func model(environment: [String: String] = ProcessInfo.processInfo.environment) -> String {
+        let configured = environment["OPENAI_TRANSCRIPTION_MODEL"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let configured, !configured.isEmpty else { return defaultModel }
+        return configured
+    }
+}
+
 enum TranscriptionRoute: Equatable {
     case openAI
     case macOS
@@ -36,6 +47,7 @@ enum OpenAITranscriptionError: LocalizedError, Equatable {
 enum OpenAITranscriptionRequestBuilder {
     static func makeRequest(apiKey: String,
                             audioData: Data,
+                            model: String = OpenAITranscriptionSettings.defaultModel,
                             filename: String = "question.m4a",
                             boundary: String = "Boundary-\(UUID().uuidString)") -> URLRequest {
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/audio/transcriptions")!)
@@ -44,7 +56,7 @@ enum OpenAITranscriptionRequestBuilder {
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         var body = Data()
-        appendField(name: "model", value: "gpt-4o-transcribe", boundary: boundary, to: &body)
+        appendField(name: "model", value: model, boundary: boundary, to: &body)
         appendField(name: "language", value: "pt", boundary: boundary, to: &body)
         appendField(name: "response_format", value: "json", boundary: boundary, to: &body)
         appendFile(name: "file",
@@ -84,6 +96,8 @@ enum OpenAITranscriptionRequestBuilder {
 }
 
 final class OpenAITranscriptionClient {
+    var modelID: String { OpenAITranscriptionSettings.model() }
+
     @discardableResult
     func transcribe(audioURL: URL,
                     completion: @escaping (Result<String, Error>) -> Void) -> URLSessionDataTask? {
@@ -103,6 +117,7 @@ final class OpenAITranscriptionClient {
         let request = OpenAITranscriptionRequestBuilder.makeRequest(
             apiKey: apiKey,
             audioData: audioData,
+            model: modelID,
             filename: audioURL.lastPathComponent
         )
         let task = URLSession.shared.dataTask(with: request) { data, response, error in

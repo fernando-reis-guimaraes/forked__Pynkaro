@@ -5,7 +5,7 @@ Protótipo de linha de comando. Fica ouvindo o microfone; ao ouvir **"Píncaro"*
 ## Privacidade
 
 - Wake word: **Speech framework da Apple, on-device** (se o idioma pt-BR estiver baixado — veja abaixo).
-- Transcrição da pergunta: **Speech framework do macOS** por padrão. Com uma chave OpenAI configurada, usa `gpt-4o-transcribe`; se a API falhar, retorna automaticamente ao macOS.
+- Transcrição da pergunta: **Speech framework do macOS** por padrão. Com uma chave OpenAI configurada, usa `OPENAI_TRANSCRIPTION_MODEL` (padrão `gpt-4o-transcribe`); se a API falhar, retorna automaticamente ao macOS.
 - O áudio só sai do Mac quando a OpenAI está configurada. O arquivo temporário é apagado após qualquer tentativa de transcrição.
 - Voz: **AVSpeechSynthesizer**, local.
 - O texto da pergunta é enviado para `api.anthropic.com`; com ElevenLabs, o texto da resposta também é enviado para síntese de voz.
@@ -81,6 +81,7 @@ Chaves de API: no `config.json` (ver "Como rodar"). Demais ajustes, por variáve
 | Variável              | Padrão                                            | Descrição                                                                                           |
 | --------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `PYNKARO_MODEL`       | `claude-sonnet-5`                                 | modelo da API Anthropic                                                                             |
+| `OPENAI_TRANSCRIPTION_MODEL` | `gpt-4o-transcribe`                       | use `gpt-4o-mini-transcribe` para priorizar custo e potencialmente menor latência                    |
 | `PYNKARO_VOICE`       | melhor voz masculina pt-BR instalada              | nome da voz do sistema (ex.: `Felipe (Aprimorada)`)                                                 |
 | `ELEVENLABS_VOICE_ID` | `9yzdeviXkFddZ4Oz8Mok` (Lutz, masculina, risonha) | voz da ElevenLabs — a Lutz vem da Voice Library: adicione-a em My Voices na sua conta antes de usar |
 | `ELEVENLABS_MODEL`    | `eleven_multilingual_v2`                          | use `eleven_flash_v2_5` para menor latência                                                         |

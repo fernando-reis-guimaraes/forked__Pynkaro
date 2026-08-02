@@ -269,7 +269,7 @@ final class VoiceAssistant: NSObject {
         }
 
         avatar.setCaption("Transcrevendo com OpenAI…")
-        print("☁️ Transcrevendo pergunta com a OpenAI...")
+        print("☁️ Transcrevendo pergunta com a OpenAI (\(transcriber.modelID))...")
         transcriptionTask = transcriber.transcribe(audioURL: audioURL) { [weak self] result in
             DispatchQueue.main.async {
                 self?.handleOpenAITranscriptionResult(

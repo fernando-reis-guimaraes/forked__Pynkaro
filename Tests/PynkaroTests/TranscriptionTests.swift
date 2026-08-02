@@ -3,6 +3,20 @@ import XCTest
 @testable import Pynkaro
 
 final class OpenAITranscriptionTests: XCTestCase {
+    func testTranscriptionModelComesFromEnvironmentWithStableDefault() {
+        XCTAssertEqual(OpenAITranscriptionSettings.model(environment: [:]), "gpt-4o-transcribe")
+        XCTAssertEqual(
+            OpenAITranscriptionSettings.model(environment: ["OPENAI_TRANSCRIPTION_MODEL": "  "]),
+            "gpt-4o-transcribe"
+        )
+        XCTAssertEqual(
+            OpenAITranscriptionSettings.model(
+                environment: ["OPENAI_TRANSCRIPTION_MODEL": "gpt-4o-mini-transcribe"]
+            ),
+            "gpt-4o-mini-transcribe"
+        )
+    }
+
     func testOpenAIIsOptionalWhenSelectingTranscriptionRoute() {
         XCTAssertEqual(TranscriptionRoute.preferred(openAIKey: nil), .macOS)
         XCTAssertEqual(TranscriptionRoute.preferred(openAIKey: ""), .macOS)
@@ -14,6 +28,7 @@ final class OpenAITranscriptionTests: XCTestCase {
         let request = OpenAITranscriptionRequestBuilder.makeRequest(
             apiKey: "sk-test",
             audioData: Data("AUDIO-CONTENT".utf8),
+            model: "gpt-4o-mini-transcribe",
             filename: "pergunta.m4a",
             boundary: "TEST-BOUNDARY"
         )
@@ -28,7 +43,7 @@ final class OpenAITranscriptionTests: XCTestCase {
 
         let body = try XCTUnwrap(request.httpBody)
         let text = try XCTUnwrap(String(data: body, encoding: .utf8))
-        XCTAssertTrue(text.contains("name=\"model\"\r\n\r\ngpt-4o-transcribe"))
+        XCTAssertTrue(text.contains("name=\"model\"\r\n\r\ngpt-4o-mini-transcribe"))
         XCTAssertTrue(text.contains("name=\"language\"\r\n\r\npt"))
         XCTAssertTrue(text.contains("name=\"response_format\"\r\n\r\njson"))
         XCTAssertTrue(text.contains("filename=\"pergunta.m4a\""))
