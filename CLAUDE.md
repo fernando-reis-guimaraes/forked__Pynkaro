@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## O que é
 
-Pynkaro é um assistente de voz para macOS (protótipo de linha de comando, Swift Package). Fluxo: detecção local da wake word "Píncaro" → gravação da pergunta → transcrição pela OpenAI → pergunta à API da Anthropic (Claude, com busca na web) → resposta falada (ElevenLabs ou voz do sistema) com avatar animado na tela e lip sync por visemas.
+Pynkaro é um assistente de voz para macOS (protótipo de linha de comando, Swift Package). Fluxo: detecção local da wake word "Píncaro" → gravação da pergunta → transcrição pelo macOS ou opcionalmente pela OpenAI → pergunta à API da Anthropic (Claude, com busca na web) → resposta falada (ElevenLabs ou voz do sistema) com avatar animado na tela e lip sync por visemas.
 
 ## Comandos
 
@@ -19,7 +19,7 @@ Não há linter configurado. Os testes usam XCTest; o app só roda de fato em ma
 
 ## Configuração em runtime
 
-- `config.json` na raiz (gitignored; modelo em `config.example.json`) ou `~/.config/pynkaro/config.json`: chaves `anthropic_api_key`, `openai_api_key` e `elevenlabs_api_key`. Carregado por `Config.swift`; variáveis de ambiente `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`/`ELEVENLABS_API_KEY` são fallback.
+- `config.json` na raiz (gitignored; modelo em `config.example.json`) ou `~/.config/pynkaro/config.json`: `anthropic_api_key` é obrigatória; `openai_api_key` e `elevenlabs_api_key` são opcionais. Carregado por `Config.swift`; variáveis de ambiente `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`/`ELEVENLABS_API_KEY` são fallback.
 - Env vars opcionais: `PYNKARO_MODEL`, `PYNKARO_WAKE_WORD`, `PYNKARO_WEB_SEARCH=0`, `PYNKARO_VOICE`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL`.
 - Imagens carregadas em runtime da raiz do projeto (ou `~/.config/pynkaro/`): `avatar.png` (obrigatória para exibir o avatar) e sprites de boca opcionais `avatar_mid.png`, `avatar_open.png`, `avatar_round.png`, `avatar_fv.png`.
 
@@ -29,9 +29,9 @@ O centro é a máquina de estados em `VoiceAssistant.swift`: `waitingWakeWord �
 
 - `PynkaroApp.swift` — entrada do app (SwiftUI `@main`): `MenuBarExtra` cujo ícone reflete o estado, menu (pausar/retomar, sugestores, sair) e a janela dos sugestores de notícias (`@AppStorage` → UserDefaults, lidos pelo `ClaudeClient` a cada pergunta). `AppDelegate` define `.accessory` (sem Dock) e inicia o assistente.
 - `AssistantController.swift` — `ObservableObject` singleton que faz a ponte VoiceAssistant → SwiftUI (`AssistantStatus` com símbolo e rótulo por estado; `pause()`/`resume()`).
-- `SpeechRecognizer.swift` — AVAudioEngine + SFSpeechRecognizer pt-BR, usado somente para a wake word (on-device quando disponível). Emite parciais via `onPartial`; sessões expiram em ~1 min, então `VoiceAssistant` reinicia a escuta a cada 45s e após erros. Um contador `generation` invalida callbacks antigos e as wake words entram em `contextualStrings`.
+- `SpeechRecognizer.swift` — AVAudioEngine + SFSpeechRecognizer pt-BR, usado para a wake word e para transcrever o M4A como fallback (on-device quando disponível). Emite parciais da wake word via `onPartial`; sessões expiram em ~1 min, então `VoiceAssistant` reinicia a escuta a cada 45s e após erros. Um contador `generation` invalida callbacks antigos.
 - `QuestionRecorder.swift` — AVAudioRecorder em M4A mono, com medição de volume. Dá 6s para a fala começar, encerra após 1,8s de silêncio e limita cada pergunta a 60s. O usuário precisa pausar depois da wake word.
-- `OpenAITranscriptionClient.swift` — envia o M4A como multipart para `/v1/audio/transcriptions`, com `gpt-4o-transcribe`, `language=pt` e resposta JSON. Não há fallback local; temporários são apagados em todos os caminhos.
+- `OpenAITranscriptionClient.swift` — quando há chave, envia o M4A como multipart para `/v1/audio/transcriptions`, com `gpt-4o-transcribe`, `language=pt` e resposta JSON. Ausência ou falha da OpenAI aciona o fallback do Speech framework sem pedir nova gravação; temporários são apagados em todos os caminhos.
 - `ClaudeClient.swift` — Messages API da Anthropic com histórico (máx. 20 mensagens) e ferramenta server-side `web_search` (max_uses 3). O system prompt é recomputado a cada chamada para injetar data/hora locais e inclui: persona bem-humorada, limite estrito de 1 frase, "modo opinião" (perguntas iniciadas com "Na sua opinião" → resposta cômica sem busca) e a resposta fixa sobre quem sugeriu as notícias. Respostas com busca vêm em múltiplos blocos: concatenar apenas os blocos `type == "text"`.
 - `Speaker.swift` — define o protocolo `Speaking` (speak + callback `onMouthLevel`) e a implementação com AVSpeechSynthesizer (escolhe a melhor voz pt-BR masculina instalada). Boca animada por evento de palavra (`willSpeakRangeOfSpeechString`).
 - `ElevenLabsSpeaker.swift` — TTS principal. Usa o endpoint `with-timestamps` (JSON com `audio_base64` + alignment por caractere) e constrói uma timeline de visemas (mapa caractere→nível de boca 0-4); um timer 60fps segue `player.currentTime`. Degradação em camadas: sem alignment → medição de amplitude (`averagePower`); falha da API → fallback para `Speaker` (voz do sistema).

@@ -3,6 +3,13 @@ import XCTest
 @testable import Pynkaro
 
 final class OpenAITranscriptionTests: XCTestCase {
+    func testOpenAIIsOptionalWhenSelectingTranscriptionRoute() {
+        XCTAssertEqual(TranscriptionRoute.preferred(openAIKey: nil), .macOS)
+        XCTAssertEqual(TranscriptionRoute.preferred(openAIKey: ""), .macOS)
+        XCTAssertEqual(TranscriptionRoute.preferred(openAIKey: "   "), .macOS)
+        XCTAssertEqual(TranscriptionRoute.preferred(openAIKey: "sk-test"), .openAI)
+    }
+
     func testMultipartRequestContainsAuthenticationFieldsAndAudio() throws {
         let request = OpenAITranscriptionRequestBuilder.makeRequest(
             apiKey: "sk-test",

@@ -3,7 +3,7 @@ import AVFoundation
 import Speech
 
 /// Máquina de estados do assistente:
-/// wake word local → gravação → transcrição OpenAI → Claude → fala → volta ao início.
+/// wake word local → gravação → transcrição OpenAI/macOS → Claude → fala → volta ao início.
 final class VoiceAssistant: NSObject {
 
     private enum State {
@@ -209,7 +209,8 @@ final class VoiceAssistant: NSObject {
             text.range(of: $0, options: [.caseInsensitive, .diacriticInsensitive]) != nil
         }) else { return }
 
-        // O reconhecedor local para aqui. A pergunta será apenas gravada e enviada à OpenAI.
+        // O reconhecedor da wake word para aqui. A pergunta será gravada e
+        // transcrita pela OpenAI ou, como fallback, pelo próprio macOS.
         recognizer.stopListening()
         beginQuestionCapture()
     }
@@ -254,59 +255,108 @@ final class VoiceAssistant: NSObject {
 
         case .success(let audioURL?):
             pendingAudioURL = audioURL
-            state = .transcribing
-            avatar.setCaption("Transcrevendo…")
-            print("☁️ Transcrevendo pergunta com a OpenAI...")
+            beginQuestionTranscription(audioURL: audioURL, generation: generation)
+        }
+    }
 
-            transcriptionTask = transcriber.transcribe(audioURL: audioURL) { [weak self] result in
-                DispatchQueue.main.async {
-                    self?.handleTranscriptionResult(
-                        result,
-                        audioURL: audioURL,
-                        generation: generation
-                    )
-                }
+    private func beginQuestionTranscription(audioURL: URL, generation: Int) {
+        state = .transcribing
+
+        guard TranscriptionRoute.preferred(openAIKey: Config.openAIKey) == .openAI else {
+            print("🍎 OpenAI não configurada; usando transcrição do macOS.")
+            beginLocalTranscription(audioURL: audioURL, generation: generation)
+            return
+        }
+
+        avatar.setCaption("Transcrevendo com OpenAI…")
+        print("☁️ Transcrevendo pergunta com a OpenAI...")
+        transcriptionTask = transcriber.transcribe(audioURL: audioURL) { [weak self] result in
+            DispatchQueue.main.async {
+                self?.handleOpenAITranscriptionResult(
+                    result,
+                    audioURL: audioURL,
+                    generation: generation
+                )
             }
         }
     }
 
-    private func handleTranscriptionResult(_ result: Result<String, Error>,
-                                           audioURL: URL,
-                                           generation: Int) {
-        try? FileManager.default.removeItem(at: audioURL)
-        if pendingAudioURL == audioURL {
-            pendingAudioURL = nil
-        }
-
+    private func handleOpenAITranscriptionResult(_ result: Result<String, Error>,
+                                                 audioURL: URL,
+                                                 generation: Int) {
         guard generation == operationGeneration,
               !isPaused,
               state == .transcribing else { return }
         transcriptionTask = nil
 
         switch result {
+        case .success(let question):
+            finishTranscription(question, audioURL: audioURL, generation: generation)
+
         case .failure(let error):
+            print("⚠️ OpenAI indisponível: \(error.localizedDescription)")
+            print("🍎 Tentando transcrição pelo macOS...")
+            beginLocalTranscription(audioURL: audioURL, generation: generation)
+        }
+    }
+
+    private func beginLocalTranscription(audioURL: URL, generation: Int) {
+        avatar.setCaption("Transcrevendo no Mac…")
+        recognizer.transcribeFile(at: audioURL) { [weak self] result in
+            DispatchQueue.main.async {
+                self?.handleLocalTranscriptionResult(
+                    result,
+                    audioURL: audioURL,
+                    generation: generation
+                )
+            }
+        }
+    }
+
+    private func handleLocalTranscriptionResult(_ result: Result<String, Error>,
+                                                audioURL: URL,
+                                                generation: Int) {
+        guard generation == operationGeneration,
+              !isPaused,
+              state == .transcribing else { return }
+
+        switch result {
+        case .success(let question):
+            finishTranscription(question, audioURL: audioURL, generation: generation)
+
+        case .failure(let error):
+            removeAudio(at: audioURL)
             handleOperationalError(
                 error,
                 message: "Desculpe, não consegui transcrever sua pergunta.",
                 generation: generation
             )
+        }
+    }
 
-        case .success(let question):
-            print("📝 Transcrição: \(question)")
-            avatar.setCaption("Você: \(question)")
+    private func finishTranscription(_ question: String,
+                                     audioURL: URL,
+                                     generation: Int) {
+        removeAudio(at: audioURL)
 
-            if isCancelRequest(question) {
-                print("🙈 Cancelado por voz. Voltando a aguardar.")
-                returnToWakeWord()
-                return
-            }
+        guard generation == operationGeneration,
+              !isPaused,
+              state == .transcribing else { return }
 
-            state = .thinking
-            print("🧠 Pergunta: \(question)")
-            claude.ask(question) { [weak self] result in
-                DispatchQueue.main.async {
-                    self?.handleAnswer(result, generation: generation)
-                }
+        print("📝 Transcrição: \(question)")
+        avatar.setCaption("Você: \(question)")
+
+        if isCancelRequest(question) {
+            print("🙈 Cancelado por voz. Voltando a aguardar.")
+            returnToWakeWord()
+            return
+        }
+
+        state = .thinking
+        print("🧠 Pergunta: \(question)")
+        claude.ask(question) { [weak self] result in
+            DispatchQueue.main.async {
+                self?.handleAnswer(result, generation: generation)
             }
         }
     }
@@ -364,6 +414,7 @@ final class VoiceAssistant: NSObject {
         questionRecorder.cancel()
         transcriptionTask?.cancel()
         transcriptionTask = nil
+        recognizer.stopListening()
         removePendingAudio()
         avatar.hide()
         state = .waitingWakeWord
@@ -377,5 +428,12 @@ final class VoiceAssistant: NSObject {
             try? FileManager.default.removeItem(at: pendingAudioURL)
         }
         pendingAudioURL = nil
+    }
+
+    private func removeAudio(at url: URL) {
+        try? FileManager.default.removeItem(at: url)
+        if pendingAudioURL == url {
+            pendingAudioURL = nil
+        }
     }
 }

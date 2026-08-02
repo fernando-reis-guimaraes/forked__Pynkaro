@@ -1,11 +1,12 @@
 # Pynkaro — assistente de voz local para macOS
 
-Protótipo de linha de comando. Fica ouvindo o microfone; ao ouvir **"Píncaro"**, grava a pergunta, transcreve com a OpenAI, envia o texto para o Claude e fala a resposta.
+Protótipo de linha de comando. Fica ouvindo o microfone; ao ouvir **"Píncaro"**, grava a pergunta, transcreve pelo macOS ou pela OpenAI, envia o texto para o Claude e fala a resposta.
 
 ## Privacidade
 
 - Wake word: **Speech framework da Apple, on-device** (se o idioma pt-BR estiver baixado — veja abaixo).
-- Transcrição da pergunta: **OpenAI** (`gpt-4o-transcribe`); o arquivo de áudio temporário é enviado à API e apagado depois da resposta.
+- Transcrição da pergunta: **Speech framework do macOS** por padrão. Com uma chave OpenAI configurada, usa `gpt-4o-transcribe`; se a API falhar, retorna automaticamente ao macOS.
+- O áudio só sai do Mac quando a OpenAI está configurada. O arquivo temporário é apagado após qualquer tentativa de transcrição.
 - Voz: **AVSpeechSynthesizer**, local.
 - O texto da pergunta é enviado para `api.anthropic.com`; com ElevenLabs, o texto da resposta também é enviado para síntese de voz.
 
@@ -13,8 +14,8 @@ Protótipo de linha de comando. Fica ouvindo o microfone; ao ouvir **"Píncaro"*
 
 - macOS 13+ (Apple Silicon recomendado), Xcode ou Command Line Tools instalados.
 - Chave de API da Anthropic (https://console.anthropic.com).
-- Chave de API da OpenAI (https://platform.openai.com/api-keys).
-- Para detecção local da wake word: em **Ajustes do Sistema > Teclado > Ditado**, ative o ditado e baixe Português (Brasil). O app avisa no início se o modo on-device está ativo.
+- Chave de API da OpenAI opcional (https://platform.openai.com/api-keys).
+- Para wake word e fallback de transcrição on-device: em **Ajustes do Sistema > Teclado > Ditado**, ative o ditado e baixe Português (Brasil). O app avisa no início se o modo on-device está ativo; sem o idioma local, o Speech framework pode usar os servidores da Apple.
 
 ## Como rodar
 
@@ -23,10 +24,12 @@ Protótipo de linha de comando. Fica ouvindo o microfone; ao ouvir **"Píncaro"*
 ```json
 {
   "anthropic_api_key": "sk-ant-...",
-  "openai_api_key": "sk-...",
-  "elevenlabs_api_key": "..."
+  "openai_api_key": "",
+  "elevenlabs_api_key": ""
 }
 ```
+
+Preencha somente os serviços desejados; os campos vazios mantêm transcrição e voz no macOS.
 
 > Ou configure os valores em .envrc e .env, melhor para desenvolvimento e debugging
 
@@ -52,7 +55,7 @@ source .envrc # ou direnv allow se tiver o direnv instalado
 ./Pynkaro.app/Contents/MacOS/Pynkaro
 ```
 
-Para distribuir, envie o `Pynkaro.dmg`: o usuário arrasta o app para Applications e, na primeira execução, uma janela de boas-vindas pede as chaves de API (Anthropic e OpenAI obrigatórias; ElevenLabs opcional — sem ela, voz do sistema), salvas no **Keychain**. Depois dá para editá-las em "Configurações…" no menu da orelha. O `config.json` continua funcionando como fallback para desenvolvimento.
+Para distribuir, envie o `Pynkaro.dmg`: o usuário arrasta o app para Applications e, na primeira execução, uma janela de boas-vindas pede as chaves de API (somente Anthropic é obrigatória; OpenAI e ElevenLabs são opcionais), salvas no **Keychain**. Sem OpenAI, transcreve pelo macOS; sem ElevenLabs, usa a voz do sistema. Depois dá para editá-las em "Configurações…" no menu da orelha. O `config.json` continua funcionando como fallback para desenvolvimento.
 
 **Atenção (Gatekeeper):** com a assinatura ad-hoc atual, o app só roda sem bloqueio no Mac em que foi compilado. Para outros Macs é preciso assinar com **Developer ID** e **notarizar** (conta Apple Developer, US$ 99/ano): `codesign --sign "Developer ID Application: ..." --options runtime`, depois `xcrun notarytool submit` e `xcrun stapler staple`.
 
@@ -66,12 +69,14 @@ Na primeira execução o macOS pedirá permissão de **Microfone** e **Reconheci
 
 1. Aguarde `👂 Aguardando "Píncaro"...`
 2. Diga **"Píncaro"**, aguarde `🎤 Pode falar...` e então faça a pergunta. A pausa é necessária para trocar do reconhecedor local para o gravador.
-3. Ele envia o áudio da pergunta à OpenAI, consulta o Claude com a transcrição e responde em voz alta.
+3. Ele transcreve pelo macOS ou, se configurada, pela OpenAI; depois consulta o Claude e responde em voz alta.
 4. O histórico da conversa é mantido durante a sessão.
 
 ## Configuração
 
 Chaves de API: no `config.json` (ver "Como rodar"). Demais ajustes, por variável de ambiente:
+
+`openai_api_key`/`OPENAI_API_KEY` é opcional. Quando presente, a OpenAI é a primeira opção de transcrição; ausência ou erro da API ativa o fallback automático do macOS.
 
 | Variável              | Padrão                                            | Descrição                                                                                           |
 | --------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -106,7 +111,7 @@ O app habilita a ferramenta de busca da própria API da Anthropic (`web_search`)
 
 ### Voz ElevenLabs
 
-Com `ELEVENLABS_API_KEY` definida, a resposta é sintetizada na nuvem da ElevenLabs (voz neural, muito mais natural). Apenas o **texto** da resposta é enviado à ElevenLabs; o áudio do microfone é enviado somente à OpenAI para transcrição. Se a API de voz falhar, o app usa a voz do sistema como fallback.
+Com `ELEVENLABS_API_KEY` definida, a resposta é sintetizada na nuvem da ElevenLabs (voz neural, muito mais natural). Apenas o **texto** da resposta é enviado à ElevenLabs. O áudio do microfone só é enviado à OpenAI quando `OPENAI_API_KEY` está configurada. Se qualquer serviço opcional falhar, o app retorna ao recurso correspondente do macOS.
 
 Para escolher outra voz, veja as suas em https://elevenlabs.io/app/voice-lab ou liste via API:
 
@@ -114,16 +119,16 @@ Para escolher outra voz, veja as suas em https://elevenlabs.io/app/voice-lab ou 
 curl -s https://api.elevenlabs.io/v1/voices -H "xi-api-key: $ELEVENLABS_API_KEY" | python3 -c "import json,sys; [print(v['voice_id'], '-', v['name']) for v in json.load(sys.stdin)['voices']]"
 ```
 
-Ajustes no código: wake word em `VoiceAssistant.swift` (`wakeWord`), tempo de silêncio para encerrar a pergunta (`armSilenceTimer`, 1,8 s), prompt de sistema em `ClaudeClient.swift`.
+Ajustes no código: wake words em `VoiceAssistant.swift`, limites de silêncio em `QuestionRecorder.swift` e prompt de sistema em `ClaudeClient.swift`.
 
 ## Arquitetura
 
 ```
 main.swift            → entrada, run loop
 VoiceAssistant.swift  → máquina de estados e coordenação do fluxo
-SpeechRecognizer.swift→ wake word via SFSpeechRecognizer (pt-BR, on-device)
+SpeechRecognizer.swift→ wake word e fallback de arquivo via SFSpeechRecognizer
 QuestionRecorder.swift→ gravação M4A + detecção de silêncio por volume
-OpenAITranscriptionClient.swift → envio multipart e transcrição da pergunta
+OpenAITranscriptionClient.swift → transcrição remota opcional via multipart
 ClaudeClient.swift    → Messages API da Anthropic, com histórico
 Speaker.swift         → AVSpeechSynthesizer (voz pt-BR)
 ```

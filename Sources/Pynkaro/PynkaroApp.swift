@@ -45,8 +45,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.pauseItem.title = (status == .paused) ? "Retomar escuta" : "Pausar escuta"
             }
 
-        // Anthropic responde; OpenAI transcreve. Ambas são obrigatórias.
-        if Config.anthropicKey == nil || Config.openAIKey == nil {
+        // Anthropic é obrigatória. Sem OpenAI, a transcrição fica no macOS.
+        if Config.anthropicKey == nil {
             openSettings(onboarding: true)
         } else {
             AssistantController.shared.start()
@@ -181,7 +181,7 @@ struct SettingsView: View {
             if isOnboarding {
                 Text("Bem-vindo ao Pynkaro! 🦊")
                     .font(.title2).bold()
-                Text("Para começar, informe suas chaves de API. Elas ficam guardadas com segurança no Keychain do seu Mac.")
+                Text("Para começar, informe a chave da Anthropic. OpenAI e ElevenLabs são opcionais; sem elas, o app usa os recursos do macOS.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
@@ -198,9 +198,9 @@ struct SettingsView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Chave da OpenAI (obrigatória)")
+                Text("Chave da OpenAI (opcional)")
                     .font(.subheadline).bold()
-                TextField("sk-...", text: $openAIKey)
+                TextField("Sem ela, o app transcreve pelo macOS", text: $openAIKey)
                 Link("Criar chave em platform.openai.com",
                      destination: URL(string: "https://platform.openai.com/api-keys")!)
                     .font(.caption)
@@ -216,7 +216,7 @@ struct SettingsView: View {
             }
 
             if !isOnboarding {
-                Text("Mudanças na chave da ElevenLabs valem após reiniciar o app.")
+                Text("A chave da OpenAI vale imediatamente; mudanças na ElevenLabs exigem reiniciar o app.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -230,10 +230,7 @@ struct SettingsView: View {
                     onSaved?()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(
-                    anthropicKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                    openAIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                )
+                .disabled(anthropicKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .textFieldStyle(.roundedBorder)

@@ -1,5 +1,18 @@
 import Foundation
 
+enum TranscriptionRoute: Equatable {
+    case openAI
+    case macOS
+
+    static func preferred(openAIKey: String?) -> Self {
+        guard let openAIKey,
+              !openAIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .macOS
+        }
+        return .openAI
+    }
+}
+
 enum OpenAITranscriptionError: LocalizedError, Equatable {
     case missingAPIKey
     case invalidResponse
