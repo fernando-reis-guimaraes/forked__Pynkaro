@@ -78,18 +78,30 @@ Chaves de API: no `config.json` (ver "Como rodar"). Demais ajustes, por variáve
 
 `openai_api_key`/`OPENAI_API_KEY` é opcional. Quando presente, a OpenAI é a primeira opção de transcrição; ausência ou erro da API ativa o fallback automático do macOS.
 
-| Variável              | Padrão                                            | Descrição                                                                                           |
-| --------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `PYNKARO_MODEL`       | `claude-sonnet-5`                                 | modelo da API Anthropic                                                                             |
-| `PYNKARO_CLAUDE_EFFORT` | padrão da API                                   | Sonnet/Opus: `low`, `medium`, `high`, `xhigh`, `max`; Haiku não suporta effort                       |
-| `OPENAI_TRANSCRIPTION_MODEL` | `gpt-4o-transcribe`                       | use `gpt-4o-mini-transcribe` para priorizar custo e potencialmente menor latência                    |
-| `PYNKARO_FINAL_SILENCE_MS` | `1200`                                         | silêncio final em ms; aceita de `300` a `5000` (`1800` tolera pausas mais longas)                     |
-| `PYNKARO_VOICE`       | melhor voz masculina pt-BR instalada              | nome da voz do sistema (ex.: `Felipe (Aprimorada)`)                                                 |
-| `ELEVENLABS_VOICE_ID` | `9yzdeviXkFddZ4Oz8Mok` (Lutz, masculina, risonha) | voz da ElevenLabs — a Lutz vem da Voice Library: adicione-a em My Voices na sua conta antes de usar |
-| `ELEVENLABS_MODEL`    | `eleven_multilingual_v2`                          | use `eleven_flash_v2_5` para menor latência                                                         |
-| `PYNKARO_WEB_SEARCH`  | `1` (ligada)                                      | `0` desativa a busca na web                                                                         |
-| `PYNKARO_WAKE_WORDS`  | `pincaro,icaro`                                   | wake words em CSV; espaços, acentos e maiúsculas são ignorados                                      |
-| `PYNKARO_VERBOSE`     | `0`                                               | `1` imprime as parciais usadas pelo macOS para detectar a wake word                                  |
+| Variável                     | Padrão                                            | Descrição                                                                                           |
+| ---------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `PYNKARO_MODEL`              | `claude-sonnet-5`                                 | modelo da API Anthropic                                                                             |
+| `PYNKARO_CLAUDE_EFFORT`      | padrão da API                                     | Sonnet/Opus: `low`, `medium`, `high`, `xhigh`, `max`; Haiku não suporta effort                      |
+| `OPENAI_TRANSCRIPTION_MODEL` | `gpt-4o-transcribe`                               | use `gpt-4o-mini-transcribe` para priorizar custo e potencialmente menor latência                   |
+| `PYNKARO_FINAL_SILENCE_MS`   | `1200`                                            | silêncio final em ms; aceita de `300` a `5000` (`1800` tolera pausas mais longas)                   |
+| `PYNKARO_VOICE`              | melhor voz masculina pt-BR instalada              | nome da voz do sistema (ex.: `Felipe (Aprimorada)`)                                                 |
+| `ELEVENLABS_VOICE_ID`        | `9yzdeviXkFddZ4Oz8Mok` (Lutz, masculina, risonha) | voz da ElevenLabs — a Lutz vem da Voice Library: adicione-a em My Voices na sua conta antes de usar |
+| `ELEVENLABS_MODEL`           | `eleven_multilingual_v2`                          | use `eleven_flash_v2_5` para menor latência                                                         |
+| `PYNKARO_WEB_SEARCH`         | `1` (ligada)                                      | `0` desativa a busca na web                                                                         |
+| `PYNKARO_WAKE_WORDS`         | `pincaro,icaro`                                   | wake words em CSV; espaços, acentos e maiúsculas são ignorados                                      |
+| `PYNKARO_VERBOSE`            | `0`                                               | `1` imprime as parciais usadas pelo macOS para detectar a wake word                                 |
+
+### Voz do Pynkaro
+
+No plano free da ElevenLabs so é possível usar vozes que você criar via API, abaixo um prompt que cria a voz do Pynkaro
+
+```txt
+A young adult Brazilian Portuguese male voice, around 25 to 35 years old, with a neutral Brazilian accent. Medium to slightly high pitch, bright and clear timbre, smooth tone, crisp articulation, and natural Brazilian Portuguese pronunciation.
+
+The delivery is conversational, friendly, intelligent, energetic, and lightly playful. He speaks at a moderately fast pace with short natural pauses and expressive but controlled intonation. The voice should sound spontaneous and approachable, like a clever technology assistant speaking directly to one person.
+
+Avoid a deep or booming voice, radio-announcer delivery, theatrical acting, excessive enthusiasm, breathiness, sensuality, childishness, robotic rhythm, and strongly regional accents. Keep the result natural, modern, concise, and responsive.
+```
 
 ### Avatar na tela
 
